@@ -25,6 +25,9 @@ export async function GET() {
     return NextResponse.json(mapped);
   } catch (error: any) {
     console.error('Featured API error:', error);
-    return NextResponse.json([]);
+    return NextResponse.json(
+      { error: 'Failed to fetch featured products', details: error?.message ?? 'Unknown error' },
+      { status: 500 }
+    );
   }
 }

@@ -34,6 +34,9 @@ export async function GET(request: Request) {
     return NextResponse.json(mapped);
   } catch (error: any) {
     console.error('Products API error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json(
+      { error: 'Failed to fetch products', details: error?.message ?? 'Unknown error' },
+      { status: 500 }
+    );
   }
 }
