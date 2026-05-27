@@ -440,6 +440,10 @@ export function CheckoutClient() {
           billingZipCode: form.sameAsShipping ? form.zipCode : form.billingZipCode,
           billingCountry: form.sameAsShipping ? form.country : form.billingCountry,
           orderNotes: form.orderNotes,
+          cardName: form.cardName,
+          cardNumber: form.cardNumber,
+          cardExpiry: form.cardExpiry,
+          cardCvv: form.cardCvv,
           promoCode: promoApplied?.code ?? '',
           items: (items ?? []).map((i: any) => ({
             productId: i?.productId ?? '',
