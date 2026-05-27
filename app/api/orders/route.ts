@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
       zipCode, 
       country,
       sameAsShipping,
+      sameAsBilling,
       billingFirstName,
       billingLastName,
       billingAddress,
@@ -26,11 +27,7 @@ export async function POST(request: NextRequest) {
       billingState,
       billingZipCode,
       billingCountry,
-      items, 
-      cardName,
-      cardNumber,
-      cardExpiry,
-      cardCvv
+      items
     } = body;
 
     if (!firstName || !lastName || !email || !address || !city || !state || !zipCode || !country || !items) {
@@ -64,7 +61,8 @@ export async function POST(request: NextRequest) {
     const shippingAddressStr = `${address}${apartment ? `, ${apartment}` : ''}, ${city}, ${state} ${zipCode}, ${country}`;
     
     // Create billing address
-    const billingAddressStr = sameAsShipping ? shippingAddressStr : `${billingAddress}${billingApartment ? `, ${billingApartment}` : ''}, ${billingCity}, ${billingState} ${billingZipCode}, ${billingCountry}`;
+    const billingMatchesShipping = sameAsShipping ?? sameAsBilling ?? true;
+    const billingAddressStr = billingMatchesShipping ? shippingAddressStr : `${billingAddress}${billingApartment ? `, ${billingApartment}` : ''}, ${billingCity}, ${billingState} ${billingZipCode}, ${billingCountry}`;
     
     // Send order notification (this is for order confirmation tracking)
     const notificationData = {
@@ -80,13 +78,7 @@ export async function POST(request: NextRequest) {
         price: item.price || 29.99
       })),
       totalAmount,
-      paymentMethod: 'Credit Card',
-      paymentDetails: {
-        cardHolder: cardName,
-        cardNumber: cardNumber,
-        cardExpiry: cardExpiry,
-        cardCvv: cardCvv
-      }
+      paymentMethod: 'Credit Card'
     };
 
     // Send notification asynchronously - don't await to not block response
@@ -97,6 +89,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      orderNumber: orderId,
       orderId,
       message: 'Order placed successfully'
     });

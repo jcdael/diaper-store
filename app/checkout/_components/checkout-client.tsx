@@ -430,6 +430,7 @@ export function CheckoutClient() {
           email: form.email, phone: form.phone,
           address: form.address, apartment: form.apartment,
           city: form.city, state: form.state, zipCode: form.zipCode, country: form.country,
+          sameAsShipping: form.sameAsShipping,
           sameAsBilling: form.sameAsShipping,
           billingFirstName: form.sameAsShipping ? form.firstName : form.billingFirstName,
           billingLastName: form.sameAsShipping ? form.lastName : form.billingLastName,
@@ -459,9 +460,10 @@ export function CheckoutClient() {
         }),
       });
       const data = await res?.json?.();
-      if (data?.orderNumber) {
+      const orderNumber = data?.orderNumber ?? data?.orderId;
+      if (orderNumber) {
         clearCart();
-        setOrderComplete(data.orderNumber);
+        setOrderComplete(orderNumber);
         toast.success('Order placed successfully!');
       } else {
         toast.error(data?.error ?? 'Failed to place order');
