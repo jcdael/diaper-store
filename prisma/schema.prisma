@@ -1,0 +1,108 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/diaper_store/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  size          String
+  weightRange   String
+  packCount     Int
+  packType      String
+  price         Float
+  originalPrice Float
+  description   String
+  features      String[]
+  imageUrl      String
+  inStock       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  reviews       Review[]
+  orderItems    OrderItem[]
+
+  @@index([size])
+  @@index([packType])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  author    String
+  rating    Int
+  title     String
+  content   String
+  verified  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique
+  firstName       String
+  lastName        String
+  email           String
+  phone           String
+  address         String
+  apartment       String      @default("")
+  city            String
+  state           String
+  zipCode         String
+  country         String
+  billingFirstName  String    @default("")
+  billingLastName   String    @default("")
+  billingAddress    String    @default("")
+  billingApartment  String    @default("")
+  billingCity       String    @default("")
+  billingState      String    @default("")
+  billingZipCode    String    @default("")
+  billingCountry    String    @default("")
+  sameAsBilling     Boolean   @default(true)
+  orderNotes      String      @default("")
+  promoCode       String      @default("")
+  subtotal        Float
+  discount        Float       @default(0)
+  shipping        Float
+  tax             Float
+  total           Float
+  status          String      @default("pending")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  items           OrderItem[]
+
+  @@index([email])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float
+  name      String
+
+  @@index([orderId])
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+}
